@@ -44,7 +44,7 @@ The container image will be downloaded to your computer via DockerHub. If you wa
 
 Then you will need to find the address of the container:
 
-      docker inspect localmoney_web_1 |grep "IPAddress"
+      docker inspect levelmoney_web_1 |grep "IPAddress"
 
 And it should be repeated twice (will have better solution for this). Then go to ${IPADDRESS}:5000 in your browser.
 
