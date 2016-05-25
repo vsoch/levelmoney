@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+    
+{% block content %}
+
+    <div class="col-md-3">
+        <div class="row">
+         {% include 'login_form.html' %}
+        </div>
+
+</div>
+<div class ="col-md-7">
+<h1 style="color:white;padding-top:200px;padding-left:200px">{{ message }}</h1>
+</div>
+
+<div class ="col-md-2" style="padding-top:30px">
+ <button class="btn btn-sm btn-default" id="fillin" style="background-color:#831F69;color:white">Demo ID</button>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+    <script type="text/javascript">
+    $(document).ready(function() {
+
+        // Turn on tooltips
+        $('[data-toggle="tooltip"]').tooltip()
+
+        // Fill in box with demo button id
+        $("#fillin").click(function(){
+            $("#login").val("42069000")
+        });
+
+    });
+    </script>
+{% endblock %}

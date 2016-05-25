@@ -1,86 +1,11 @@
 from flask import Flask, render_template, request
+from numpy.random import choice
 from datetime import datetime
 import requests
 import numpy
 import pandas
 import json
 import re
-
-# SERVER CONFIGURATION ##############################################
-class MoneyServer(Flask):
-
-    def __init__(self, *args, **kwargs):
-        super(MoneyServer, self).__init__(*args, **kwargs)
-
-        # load data on start of application
-        self.api_token = self.read_auth("data/.api_token")
-        self.auth_token = self.read_auth("data/.auth_token")
-        self.userid = int(self.read_auth("data/.userid"))
-        self.transactions = get_transactions()          
-        self.accounts = get_accounts()
-
-        def self.read_auth(auth_file):
-            '''read_auth returns a single line (first) in a text file
-            :param auth_file: full path to file to read
-            '''
-            filey = open(auth_file,"r")
-            text = filey.readlines()[0].strip("\n")
-            filey.close()
-            return text
-
-app = MoneyServer(__name__)
-
-# Global functions ###################################################################################
-
-def get_auth(json_strict,json_verbose):
-    '''get_auth returns the uid, token, and api-token associated with the application
-    '''
-    return {"uid":app.userid,
-            "token":app.auth_token,
-            "api-token":app.api_token,
-            "json-strict-mode":json_strict,
-            "json-verbose-response":json_verbose}
-
-def get_account_transactions(institution_login_id):
-    '''get_account_transactions returns a data frame of transactions for a particular institution-login-id
-    :param institution_login_id: the institution login id
-    :returns entries: a data frame of transaction entries for the account
-    '''
-    account_id = app.accounts["account-id"][app.accounts["institution-login-id"]==institution_login_id].tolist()[0]
-    entries = app.transactions[app.transactions["account-id"]==account_id].copy()
-    datetimes = [datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ') for x in entries["transaction-time"]]
-    year_month = ["%s-%s" %(date.year,date.month) for date in datetimes] 
-    entries["datetime"] = year_month
-    return entries
-
-def get_transaction_log(account):
-    '''get_transaction_log returns a view of the users transactions, with YYYY-MM as key, and dictionary of "spent"
-    and "income" as lookup
-    
-    ::note
- 
-       eg {"2014-10": {"spent": "$200.00", "income": "$500.00"}
-    '''
-    entries = get_account_transactions(account)
-    unique_datetimes = numpy.unique(entries["datetime"]).tolist()
-
-    log = dict()
-    spent_sum = 0  # An average month should include all months
-    income_sum = 0 # (even xmas when spending is higher)
-    for date in unique_datetimes:
-        subset = entries[entries["datetime"]==date]    
-        spent = subset['amount'][subset["amount"]<0].sum() # negative amount is debit
-        income = subset['amount'][subset["amount"]>0].sum() # negative amount is debit
-        log[date] = {"spent":"$%.2f" %(numpy.abs(spent)),"income":"$%.2f" %(income)}
-        spent_sum+=spent
-        income_sum+=income         
-
-    # calculate an average for all months
-    average_spent = spent_sum / float(len(unique_datetimes))
-    average_income = income_sum / float(len(unique_datetimes))
-    log["average"] = {"spent":"$%.2f" %(numpy.abs(average_spent)),"income":"$%.2f" %(numpy.abs(average_income))}
-    return log
-
 
 # API Wrapper Functions ##############################################################################
 
@@ -165,30 +90,170 @@ def Login(email,password):
     if response.status_code == 200:
         return response.json()
 
+
+# Global functions ###################################################################################
+
+def get_auth(json_strict,json_verbose):
+    '''get_auth returns the uid, token, and api-token associated with the application
+    '''
+    return {"uid":app.userid,
+            "token":app.auth_token,
+            "api-token":app.api_token,
+            "json-strict-mode":json_strict,
+            "json-verbose-response":json_verbose}
+
+def get_account_transactions(institution_login_id):
+    '''get_account_transactions returns a data frame of transactions for a particular institution-login-id
+    :param institution_login_id: the institution login id
+    :returns entries: a data frame of transaction entries for the account
+    '''
+    account_id = app.accounts["account-id"][app.accounts["institution-id"]==institution_login_id].tolist()[0]
+    entries = app.transactions[app.transactions["account-id"]==account_id].copy()
+    datetimes = [datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ') for x in entries["transaction-time"]]
+    year_month = ["%s-%s" %(date.year,date.month) for date in datetimes] 
+    entries["datetime"] = year_month
+    return entries
+
+def get_transaction_log(account,ignore_regex=None):
+    '''get_transaction_log returns a view of the users transactions, with YYYY-MM as key, and dictionary of "spent"
+    and "income" as lookup
+    :param ignore_regex: a regular expression to filter (ignore) a subset of transactions
+    ::note
+ 
+       eg {"2014-10": {"spent": "$200.00", "income": "$500.00"}
+    '''
+    entries = get_account_transactions(account)
+    unique_datetimes = numpy.unique(entries["datetime"]).tolist()
+
+    log = dict()
+    spent_sum = 0  # An average month should include all months
+    income_sum = 0 # (even xmas when spending is higher)
+    for date in unique_datetimes:
+        subset = entries[entries["datetime"]==date]    
+        if ignore_regex != None:
+            idx = [x for x in range(len(subset.merchant)) if re.search(ignore_regex,subset.merchant.tolist()[x])]
+            ignore_fields = subset.index[idx].tolist()
+            print "ignoring costs %s" %(",".join(subset.merchant.loc[ignore_fields]))
+            subset = subset.drop(ignore_fields)
+        spent = subset['amount'][subset["amount"]<0].sum() # negative amount is debit
+        income = subset['amount'][subset["amount"]>0].sum() # negative amount is debit
+        log[date] = {"spent":"$%.2f" %(numpy.abs(spent)),"income":"$%.2f" %(income)}
+        spent_sum+=spent
+        income_sum+=income         
+
+    # calculate an average for all months
+    average_spent = spent_sum / float(len(unique_datetimes))
+    average_income = income_sum / float(len(unique_datetimes))
+    log["average"] = {"spent":"$%.2f" %(numpy.abs(average_spent)),"income":"$%.2f" %(numpy.abs(average_income))}
+    return log
+
+
+def get_account_name(account):
+    '''get_account_name returns the user name based on an institution ID
+    :param account: the institution id
+    '''
+    # nonce:comfy-cc/hdhehe <-- checking account, institution account name
+    account_name = app.accounts["account-id"][app.accounts["institution-id"]==account][0]
+    return account_name.split("/")[1]
+
+# SERVER CONFIGURATION ##############################################
+class MoneyServer(Flask):
+
+    def __init__(self, *args, **kwargs):
+        super(MoneyServer, self).__init__(*args, **kwargs)
+
+        # load data on start of application
+        self.api_token = self.read_auth("data/.api_token")
+        self.auth_token = self.read_auth("data/.auth_token")
+        self.userid = int(self.read_auth("data/.userid"))
+
+    def read_auth(self,auth_file):
+        '''read_auth returns a single line (first) in a text file
+        :param auth_file: full path to file to read
+        '''
+        filey = open(auth_file,"r")
+        text = filey.readlines()[0].strip("\n")
+        filey.close()
+        return text
+
+# Start application
+app = MoneyServer(__name__)
+app.transactions = get_transactions()          
+app.accounts = get_accounts()
+
+
 # Views ##############################################################################################
 
 @app.route("/")
 def index():
     '''index asks the user for institution-login-id'''
-    return render_template("index.html")
+    message_options = ["Check all your accounts. One place.",
+                       "Be smart about managing your money.",
+                       "Personal finance at your fingertips."]
+    message = choice(message_options)
+    return render_template("index.html",message=message)
+
+def base_login(account_id,ignore_regex=None):
+    '''base is a general function for "authenticating" a user, meaning retrieving transactions,
+    and an account name (and message) given an account_id. A dictionary is returned with these fields
+    and if not successful, the "success" key is False, and the message field should be shown to user
+    '''
+    result = dict()
+    if account_id in app.accounts["institution-id"].tolist():
+        result["log"] = get_transaction_log(account_id,ignore_regex=ignore_regex)
+        result["name"] = get_account_name(account_id)
+        result["message"] = "Welcome to your account, %s" %(result["name"])
+        result["success"] = True
+        result["id"] = account_id
+    else:
+        result["message"] = "Sorry, the account %s was not found." %(account_id)
+        result["success"] = False
+    return result
+
+@app.route("/home/<account_id>")
+def home(account_id):
+    '''home is the login view after the user has logged in'''    
+    account_id = int(account_id)
+    result = base_login(account_id)
+    if result["success"] == True:
+        return render_template("home.html",log=result["log"],
+                                           message=result["message"],
+                                           account_id=result["id"])  
+    else:
+        return render_template("index.html",message=result["message"])
 
 @app.route("/login",methods=["POST","GET"])
 def login():
-    '''login gets the institution-login-id from post, and logs in'''
+    '''login is the first view seen after login'''
     
     if request.method == "POST":
-        account = request.form["login_id"]
-        if account in app.accounts["institution-login-id"]:
-            transaction_log = get_transaction_log(account)
-            return render_template("home.html",log=transaction_log)  
+        account = int(request.form["account_id"])
+        result = base_login(account)
+        if result["success"] == True:
+            return render_template("home.html",log=result["log"],
+                                               message=result["message"],
+                                               account_id=result["id"])  
         else:
-            message = "Sorry, the account %s was not found." %()
-            return render_template("index.html",message=message)
-
+            return render_template("index.html",message=result["message"])
     else:
         message = "You must log in first before viewing account home."
     return render_template("index.html",message=message)
     
+#--ignore-donuts: The user is so enthusiastic about donuts that they don't want donut spending to come out of their budget. Disregard all donut-related transactions from the spending. You can just use the merchant field to determine what's a donut
+
+@app.route("/donut/<account_id>",methods=["POST","GET"])
+def donut(account_id):
+    '''ignore donuts does not include donut costs'''
+    account_id = int(account_id)
+    result = base_login(account_id,ignore_regex="Krispy Kreme Donuts|DUNKIN")
+    if result["success"] == True:
+        return render_template("home.html",log=result["log"],
+                                           message=result["message"],
+                                           account_id=result["id"],
+                                           ignore_donuts="anything")  
+    else:
+        return render_template("index.html",message=result["message"])
+    return render_template("index.html",message=message)    
 
 if __name__ == "__main__":
     app.debug = True

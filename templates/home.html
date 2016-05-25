@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+    
+{% block content %}
+
+    <div class="col-md-3">
+
+        <div class="row" style='padding-top:30px'>
+           {% if not ignore_donuts %}
+           <button class="btn btn-sm btn-default" id="ignore_donuts" style="background-color:#831F69;color:white">Ignore Donuts</button>
+           {% else %}
+           <button class="btn btn-sm btn-default" id="account_donuts" style="background-color:#831F69;color:white">Account Donuts</button>
+           {% endif %}
+        </div>
+
+</div>
+<div class ="col-md-8" style="margin:25px">
+<h1 id="home_message">{{ message }}</h1>
+
+<table id="transactions" class="table table-striped table-bordered" cellspacing="0" width="100%">
+        <thead>
+            <tr>
+                <th>Month</th>
+                <th>Spent</th>
+                <th>Income</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for month,values in log.iteritems() %}
+            <tr>
+                <td>{{ month }}</td>
+                <td>{{ values.spent }}</td>
+                <td>{{ values.income }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+</table>
+
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+    <script type="text/javascript">
+    $(document).ready(function() {
+
+        // Turn on tooltips
+        $('[data-toggle="tooltip"]').tooltip()     
+
+        // Datatables
+        $('#transactions').DataTable();
+
+        // Links 
+        $("#ignore_donuts").click(function(){
+            document.location = "/donut/{{ account_id }}"
+        })
+
+        $("#account_donuts").click(function(){
+            document.location = "/home/{{ account_id }}"
+        })
+
+        // Download json
+        transcations = {{ log | safe }}
+        var data = "text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(transactions));
+        $('<a style="color:white; padding-left:20px" href="data:' + data + '" download="levelmoneylog.json">DOWNLOAD</a>').appendTo('.dataTables_length');
+
+    });
+    </script>
+{% endblock %}
