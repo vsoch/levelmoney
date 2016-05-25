@@ -41,6 +41,17 @@ def get_auth(json_strict,json_verbose):
             "json-strict-mode":json_strict,
             "json-verbose-response":json_verbose}
 
+def get_account_transactions(institution_login_id):
+    '''get_account_transactions returns a data frame of transactions for a particular institution-login-id
+    :param institution_login_id: the institution login id
+    :returns entries: a data frame of transaction entries for the account
+    '''
+    account_id = app.accounts["account-id"][app.accounts["institution-login-id"]==institution_login_id].tolist()[0]
+    entries = app.transactions[app.transactions["account-id"]==account_id].copy()
+    datetimes = [datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ') for x in entries["transaction-time"]]
+    year_month = ["%s-%s" %(date.year,date.month) for date in datetimes] 
+    entries["datetime"] = year_month
+    return entries
 
 def get_transaction_log(account):
     '''get_transaction_log returns a view of the users transactions, with YYYY-MM as key, and dictionary of "spent"
@@ -50,20 +61,39 @@ def get_transaction_log(account):
  
        eg {"2014-10": {"spent": "$200.00", "income": "$500.00"}
     '''
-    account_id = app.accounts["account-id"][app.accounts["institution-login-id"]==account].tolist()[0]
-    entries = app.transactions[app.transactions["account-id"]==account_id]
-    datetimes = [datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ') for x in entries["transaction-time"]]
-    # stopped here - need to run to meeting
+    entries = get_account_transactions(account)
+    unique_datetimes = numpy.unique(entries["datetime"]).tolist()
+
+    log = dict()
+    spent_sum = 0  # An average month should include all months
+    income_sum = 0 # (even xmas when spending is higher)
+    for date in unique_datetimes:
+        subset = entries[entries["datetime"]==date]    
+        spent = subset['amount'][subset["amount"]<0].sum() # negative amount is debit
+        income = subset['amount'][subset["amount"]>0].sum() # negative amount is debit
+        log[date] = {"spent":"$%.2f" %(numpy.abs(spent)),"income":"$%.2f" %(income)}
+        spent_sum+=spent
+        income_sum+=income         
+
+    # calculate an average for all months
+    average_spent = spent_sum / float(len(unique_datetimes))
+    average_income = income_sum / float(len(unique_datetimes))
+    log["average"] = {"spent":"$%.2f" %(numpy.abs(average_spent)),"income":"$%.2f" %(numpy.abs(average_income))}
+    return log
 
 
 # API Wrapper Functions ##############################################################################
 
-def get_transactions():
+def get_transactions(convert_to_dollar=True):
     '''get_transactions returns a pandas data frame of all transactions. For this demo this will be called
     on start of application, for a live application this would not be appropriate.
+    :param convert_to_dollar: if True, converts "centocents" to dollars (20000 centocents = $2) or 10000 = $1
     '''
     transactions = GetAllTransactions()
-    return pandas.DataFrame(transactions)
+    transactions = pandas.DataFrame(transactions)
+    if convert_to_dollar == True:
+        transactions["amount"] = transactions["amount"]/10000.0
+    return transactions
 
 
 def get_accounts():
@@ -74,9 +104,10 @@ def get_accounts():
 
 # curl -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST -d '{"args": {"uid": 1110590645, "token": "0E0BDCAFD325E86FED6822BB2DA70FE7", "api-token": "AppTokenForInterview", "json-strict-mode": false, "json-verbose-response": false}}' https://prod-api.level-labs.com/api/v2/core/get-all-transactions
 
-def api_post(url,json_strict=False,json_verbose=False):
+def api_post(url,json_strict=False,json_verbose=False,data=None):
     '''api_post posts a url to the api with appropriate headers, and data specified at
     init of the application (api_token, userid, auth_token)
+    :param data: a dictionary of key:value items to add to the data args variable
     :param url: the url to post to
     :returns response: the requests response object
     '''
@@ -85,8 +116,12 @@ def api_post(url,json_strict=False,json_verbose=False):
     args = get_auth(json_strict=json_strict,
                     json_verbose=json_verbose)
 
-    data = {"args":args}
-    return requests.post(url, headers=headers, data=json.dumps(data))
+    args = {"args":args}
+
+    if data != None:
+        args.update(data)
+
+    return requests.post(url, headers=headers, data=json.dumps(args))
     
     
 def GetAllTransactions():
@@ -117,6 +152,19 @@ def GetAccounts():
         print "Error with GetAccounts: %s" %(response.reason)
 
 
+# curl -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST -d '{"email": "level@example.com", "password": "incorrect_password", "args": {"uid": 1110590645, "token": "0E0BDCAFD325E86FED6822BB2DA70FE7", "api-token": "AppTokenForInterview", "json-strict-mode": false, "json-verbose-response": false}}' https://prod-api.level-labs.com/api/v2/core/login
+
+def Login(email,password):
+    '''Login returns a token for a user account (login request) [I don't think I need to implement this]
+    :param email: the email address associated with an account
+    :returns accounts: 
+    '''
+    data = {"email":email,"password":password}
+    url = "https://prod-api.level-labs.com/api/v2/core/login"
+    response = api_post(url,data=data)
+    if response.status_code == 200:
+        return response.json()
+
 # Views ##############################################################################################
 
 @app.route("/")
@@ -145,4 +193,3 @@ def login():
 if __name__ == "__main__":
     app.debug = True
     app.run()
-
