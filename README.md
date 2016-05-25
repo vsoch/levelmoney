@@ -4,7 +4,8 @@ This is a Dockerized web interface (demo) that does the following:
 
 - Loads a user's transactions from the GetAllTransactions endpoint
 - Determines how much money the user spends and makes in each of the months for which we have data, and in the "average" month.
-- Output these numbers in the following format:
+
+The applications output these numbers in the following format:
 
 
       {"2014-10": {"spent": "$200.00", "income": "$500.00"},
