@@ -14,6 +14,7 @@ RUN pip install numpy
 RUN pip install gunicorn
 RUN pip install pandas
 RUN pip install networkx
+RUN pip install requests
 
 ADD . /code
 WORKDIR /code

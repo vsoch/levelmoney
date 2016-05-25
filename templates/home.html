@@ -20,6 +20,9 @@
            <button class="btn btn-sm btn-default" id="reality" style="background-color:#831F69;color:white">Reality</button>
            {% endif %}
 
+           <!-- Download -->
+           <button class="btn btn-sm btn-default" id="download" style="background-color:#831F69;color:white">Download</button>
+
         </div>
 
 </div>
@@ -76,10 +79,21 @@
             document.location = "/home/{{ account_id }}"
         })
 
-        // Download json
-        transcations = {{ log | safe }}
-        var data = "text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(transactions));
-        $('<a style="color:white; padding-left:20px" href="data:' + data + '" download="levelmoneylog.json">DOWNLOAD</a>').appendTo('.dataTables_length');
+        $("#download").click(function(){
+            {% if ignore_donuts %}
+                {% if crystal_ball %}
+                    window.open("/download/{{ account_id }}/1/1")
+                {% else %}
+                    window.open("/download/{{ account_id }}/0/1")
+                {% endif %}
+            {% else %}
+                {% if crystal_ball %}
+                    window.open("/download/{{ account_id }}/1/0")
+                {% else %}
+                    window.open("/download/{{ account_id }}/0/0")
+                {% endif %}
+            {% endif %}
+        })
 
     });
     </script>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 from numpy.random import choice
 from datetime import datetime
 import requests
@@ -293,9 +293,21 @@ def crystalball(account_id):
                                            crystal_ball="anything")  
     else:
         return render_template("index.html",message=result["message"])
-    return render_template("index.html",message=message)    
 
 
+@app.route('/download/<account_id>/<crystal_ball>/<ignore_donuts>')
+def download(account_id,crystal_ball=0,ignore_donuts=0):
+    account_id = int(account_id)
+    crystal_ball = bool(crystal_ball)
+    ignore_donuts = bool(ignore_donuts)
+    ignore_regex = None
+    if ignore_donuts == True:
+        ignore_regex = "Krispy Kreme Donuts|DUNKIN"    
+    result = base_login(account_id,crystal_ball=crystal_ball,ignore_regex=ignore_regex)
+    if result["success"] == True:    
+        return jsonify(result["log"])
+    else:
+        index()  
 
 if __name__ == "__main__":
     app.debug = True
