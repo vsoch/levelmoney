@@ -90,6 +90,20 @@ def Login(email,password):
     if response.status_code == 200:
         return response.json()
 
+# curl -H 'Accept: application/json' -H 'Content-Type: application/json' -X POST -d '{"args": {"uid": 1110590645, "token": "0E0BDCAFD325E86FED6822BB2DA70FE7", "api-token": "AppTokenForInterview", "json-strict-mode": false, "json-verbose-response": false}, "year": 2015, "month": 3}' https://prod-api.level-labs.com/api/v2/core/projected-transactions-for-month
+
+def GetProjectedTransactionsForMonth(year=2015,month=3):
+    '''getProjectedTransactionsForMonth returns a list of actual (or expected) transactions for a given month. For this demo,it only works for this month (and I think the inputs of year/month are meaningless)
+    :returns transactions: 
+    '''
+    url = "https://prod-api.level-labs.com/api/v2/core/projected-transactions-for-month"   
+    args = {"year": year, "month": month}
+    response = api_post(url,data=args)
+    if response.status_code == 200:
+        return response.json()["transactions"]
+    else:
+        print "Error with GetProjectedTransactions: %s" %(response.reason)
+
 
 # Global functions ###################################################################################
 
@@ -102,19 +116,23 @@ def get_auth(json_strict,json_verbose):
             "json-strict-mode":json_strict,
             "json-verbose-response":json_verbose}
 
-def get_account_transactions(institution_login_id):
+def get_account_transactions(institution_login_id,crystal_ball=False):
     '''get_account_transactions returns a data frame of transactions for a particular institution-login-id
     :param institution_login_id: the institution login id
     :returns entries: a data frame of transaction entries for the account
     '''
     account_id = app.accounts["account-id"][app.accounts["institution-id"]==institution_login_id].tolist()[0]
     entries = app.transactions[app.transactions["account-id"]==account_id].copy()
+    if crystal_ball == True:
+        future_transactions = GetProjectedTransactionsForMonth() #just use their year/month defaults
+        entries = entries.append(pandas.DataFrame(future_transactions))
+
     datetimes = [datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ') for x in entries["transaction-time"]]
     year_month = ["%s-%s" %(date.year,date.month) for date in datetimes] 
     entries["datetime"] = year_month
     return entries
 
-def get_transaction_log(account,ignore_regex=None):
+def get_transaction_log(account,ignore_regex=None,crystal_ball=False):
     '''get_transaction_log returns a view of the users transactions, with YYYY-MM as key, and dictionary of "spent"
     and "income" as lookup
     :param ignore_regex: a regular expression to filter (ignore) a subset of transactions
@@ -122,7 +140,7 @@ def get_transaction_log(account,ignore_regex=None):
  
        eg {"2014-10": {"spent": "$200.00", "income": "$500.00"}
     '''
-    entries = get_account_transactions(account)
+    entries = get_account_transactions(account,crystal_ball=crystal_ball)
     unique_datetimes = numpy.unique(entries["datetime"]).tolist()
 
     log = dict()
@@ -193,14 +211,17 @@ def index():
     message = choice(message_options)
     return render_template("index.html",message=message)
 
-def base_login(account_id,ignore_regex=None):
+def base_login(account_id,ignore_regex=None,crystal_ball=False):
     '''base is a general function for "authenticating" a user, meaning retrieving transactions,
     and an account name (and message) given an account_id. A dictionary is returned with these fields
     and if not successful, the "success" key is False, and the message field should be shown to user
     '''
     result = dict()
     if account_id in app.accounts["institution-id"].tolist():
-        result["log"] = get_transaction_log(account_id,ignore_regex=ignore_regex)
+        result["log"] = get_transaction_log(account_id,
+                                            ignore_regex=ignore_regex,
+                                            crystal_ball=crystal_ball)
+
         result["name"] = get_account_name(account_id)
         result["message"] = "Welcome to your account, %s" %(result["name"])
         result["success"] = True
@@ -241,19 +262,40 @@ def login():
     
 #--ignore-donuts: The user is so enthusiastic about donuts that they don't want donut spending to come out of their budget. Disregard all donut-related transactions from the spending. You can just use the merchant field to determine what's a donut
 
-@app.route("/donut/<account_id>",methods=["POST","GET"])
+@app.route("/donut/<account_id>")
 def donut(account_id):
     '''ignore donuts does not include donut costs'''
     account_id = int(account_id)
     result = base_login(account_id,ignore_regex="Krispy Kreme Donuts|DUNKIN")
     if result["success"] == True:
+        message = "Your transactions not including donut spending, your majesty!"
         return render_template("home.html",log=result["log"],
-                                           message=result["message"],
+                                           message=message,
                                            account_id=result["id"],
                                            ignore_donuts="anything")  
     else:
         return render_template("index.html",message=result["message"])
     return render_template("index.html",message=message)    
+
+# --crystal-ball: We expose a  endpoint, which returns all the transactions that have happened or are expected to happen for a given month. It looks like right now it only works for this month, but that's OK. Merge the results of this API call with the full list from GetAllTransactions and use it to generate predicted spending and income numbers for the rest of this month, in addition to previous months.
+
+@app.route("/crystalball/<account_id>")
+def crystalball(account_id):
+    '''include projected transactions for future'''
+    account_id = int(account_id)
+    result = base_login(account_id,crystal_ball=True)
+    if result["success"] == True:
+        now = datetime.now()
+        message = "We've predicted the future for %s-%s!" %(now.year,now.month)
+        return render_template("home.html",log=result["log"],
+                                           message=message,
+                                           account_id=result["id"],
+                                           crystal_ball="anything")  
+    else:
+        return render_template("index.html",message=result["message"])
+    return render_template("index.html",message=message)    
+
+
 
 if __name__ == "__main__":
     app.debug = True

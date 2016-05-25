@@ -5,11 +5,21 @@
     <div class="col-md-3">
 
         <div class="row" style='padding-top:30px'>
+
+           <!-- Ignore Donuts -->
            {% if not ignore_donuts %}
            <button class="btn btn-sm btn-default" id="ignore_donuts" style="background-color:#831F69;color:white">Ignore Donuts</button>
            {% else %}
            <button class="btn btn-sm btn-default" id="account_donuts" style="background-color:#831F69;color:white">Account Donuts</button>
            {% endif %}
+
+           <!-- Crystal Ball -->
+           {% if not crystal_ball %}
+           <button class="btn btn-sm btn-default" id="crystal_ball" style="background-color:#831F69;color:white">Crystal Ball</button>
+           {% else %}
+           <button class="btn btn-sm btn-default" id="reality" style="background-color:#831F69;color:white">Reality</button>
+           {% endif %}
+
         </div>
 
 </div>
@@ -56,6 +66,13 @@
         })
 
         $("#account_donuts").click(function(){
+            document.location = "/home/{{ account_id }}"
+        })
+        $("#crystal_ball").click(function(){
+            document.location = "/crystalball/{{ account_id }}"
+        })
+
+        $("#reality").click(function(){
             document.location = "/home/{{ account_id }}"
         })
 

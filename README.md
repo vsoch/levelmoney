@@ -1,25 +1,55 @@
-# How much money did I spend?
+# How much money am I spending?
 
-**under development**
-
-42069000
+This is a Dockerized web interface (demo) that does the following:
 
 - Loads a user's transactions from the GetAllTransactions endpoint
-- Determines how much money the user spends and makes in each of the months for which we have data, and in the "average" month. What "average" means is up to you.
-- Output these numbers in the following format (and optionally in a more pretty format, if you see fit)
+- Determines how much money the user spends and makes in each of the months for which we have data, and in the "average" month.
+- Output these numbers in the following format:
+
 
       {"2014-10": {"spent": "$200.00", "income": "$500.00"},
       "2014-11": {"spent": "$1510.05", "income": "$1000.00"},
       "2015-04": {"spent": "$300.00", "income": "$500.00"},
       "average": {"spent": "$750.00", "income": "$950.00"}}
 
+This information is represented in an interactive data table, and downloadable by the user as a json file.
 
-You have considerable latitude on how to display this data, obtain it, and what language to use. Please do this in the way that feels most comfortable for you. For many of our applicants, they prefer to use a script you run from the command line. For some, it is a webpage that displays things. For others, it’s a live code notebook. What’s important is that it is reproducible by us.
+### Additional features
+- **ignoredonuts** the user can select to not include donuts. This could easily be extended to take in a custom query string by the user for transactions to filter, and currently is implemented as an "Ignore Donuts" and "Account Donuts" button.
+- **crystal ball** the user can choose to produce data for predicted spending with the "Crystal Ball" button.
 
-We’d also like you to try and add at least one “additional feature” to this program (and if you’re able, all of them). They’re listed below as command line switches for a terminal program, but we’d accept any method that lets a user decide how to display this data.
+I did not implement ignoring credit card payments because I need to get back to work. :)
 
---ignore-donuts: The user is so enthusiastic about donuts that they don't want donut spending to come out of their budget. Disregard all donut-related transactions from the spending. You can just use the merchant field to determine what's a donut - donut transactions will be named “Krispy Kreme Donuts” or “DUNKIN #336784”.
 
---crystal-ball: We expose a GetProjectedTransactionsForMonth endpoint, which returns all the transactions that have happened or are expected to happen for a given month. It looks like right now it only works for this month, but that's OK. Merge the results of this API call with the full list from GetAllTransactions and use it to generate predicted spending and income numbers for the rest of this month, in addition to previous months.
+# Application instructions
 
---ignore-cc-payments: Paying off a credit card shows up as a credit transaction and a debit transaction, but it's not really "spending" or "income". Make your aggregate numbers disregard credit card payments. For the users we give you, credit card payments will consist of two transactions with opposite amounts (e.g. 5000000 centocents and -5000000 centocents) within 24 hours of each other. For verification, you should also output a list of the credit card payments you detected - this can be in whatever format you like.
+First, download the code repo:
+
+     git clone https://www.github.com/vsoch/levelmoney
+     cd levelmoney
+
+You can run the application locally doing the following:
+
+     python index.py
+
+And open up to `127.0.0.1:5000` This assumes that you have all dependencies (numpy, etc) installed. You can also run the application via it's docker container:
+
+     docker-compose up -d
+
+The container image will be downloaded to your computer via DockerHub. If you want to build locally, first do:
+
+     docker build -t vanessa/levelmoney . 
+     docker-compose up -d 
+
+Then you will need to find the address of the container:
+
+      docker inspect localmoney_web_1 |grep "IPAddress"
+
+And it should be repeated twice (will have better solution for this). Then go to ${IPADDRESS}:5000 in your browser.
+
+
+# Usage
+
+This is a demo, so the "authentication" is just entering an institution ID into the login box that is then passed around between the views. There is no password. The tool does its initial query of transaction data using the API at application start, and this works for the demo but would not be an ideal strategy for an actual implementation (when the data would likely change). Finally, all functions are separated in sections in the equivalent [index.py](index.py) file, and this would be sub optimal for a more complex application.
+
+To use, you can either enter the demo institution ID into the box `42069000` or click the "Demo ID" in the upper right to have the application do it for you.
